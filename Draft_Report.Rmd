@@ -11,7 +11,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Preamble
 
-We are going to use a markdown document to communicate draft code and results, to try and setup a template for how we would report on these data to a client. 
+Here we are going to use a markdown document to communicate draft code and results, to try and setup a template for how we would report on these data to a client. 
 
 
 ## Load packages
