@@ -57,13 +57,14 @@ Here we would put put some text describing the results, and setting up the next 
 
 ```{r histograms with ggplot}
 metrics %>% 
-  select(!c('Direction', 'Distance')) %>%
-  pivot_longer(!c( 'Rep', 'Station', 'Year'), names_to="Indicator", values_to="value") %>%
-  ggplot(aes(x=value)) +
+  select(!c('Distance')) %>%
+  pivot_longer(!c( 'Rep', 'Station', 'Year', 'Direction'), names_to="Indicator", values_to="value") %>%
+  ggplot(aes(x=value, fill=Direction)) +
     geom_histogram()+
     facet_wrap(~Indicator, scale="free_x")
     
 ```
+
 
 ```{r plot_histograms}
 
@@ -100,9 +101,9 @@ Definitely some trends with distance,  but also definitely some non-linear thing
 #Distance scatterplot
 
 metrics %>% 
-  select(!c('Direction')) %>%
-  pivot_longer(!c( 'Rep', 'Station', 'Year', 'Distance'), names_to="Indicator", values_to="value") %>%
-  ggplot(aes(x=Distance, y=value)) +
+  #select(!c('Direction')) %>%
+  pivot_longer(!c( 'Rep', 'Station', 'Year', 'Distance', 'Direction'), names_to="Indicator",  values_to="value") %>%
+  ggplot(aes(x=Distance, y=value, fill=Direction)) +
     geom_point()+
     facet_wrap(~Indicator, scale="free_y")
 
@@ -170,8 +171,11 @@ Metrics %>%
 ## modeling section
 ```{r models}
 # Example model
- 
-summary(glmer(`Total Abundance (ind/0.1m²`) ~ DiffuserDirection + DiffuserDistance + DiffuserDirection:DiffuserDistance + (1|Rep), data = Metrics, family = poisson)
+library(lme4)
+trialmodel=glmer(`Total Abundance (ind/0.1m²)` ~ DiffuserDirection + DiffuserDistance + DiffuserDirection:DiffuserDistance + (1|Station), data = Metrics, family = poisson)
+
+# no random effects
+norfx=glm(`Total Abundance (ind/0.1m²)` ~ DiffuserDirection + DiffuserDistance + DiffuserDirection:DiffuserDistance,  data = Metrics, family = poisson)
 ```
 
 
