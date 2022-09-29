@@ -11,10 +11,10 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Preamble
 
-Here we are going to use a markdown document to communicate draft code and results, to try and setup a template for how we would report on these data to a client. 
-
+Here we are going to use a markdown document to communicate draft code and results, to try and setup a template for how we would report on these data to a client.
 
 ## Load packages
+
 I try and load packages separately from data.
 
 ```{r load_packages}
@@ -26,7 +26,7 @@ library(tidyverse)
 
 ## Loading data
 
-In future, we should try and work from either a formatted database or a .csv extracted from that formatted database, and those data should have metadata etc etc.  For now we go with what we have.
+In future, we should try and work from either a formatted database or a .csv extracted from that formatted database, and those data should have metadata etc etc. For now we go with what we have.
 
 ```{r load_data}
 #read saved data
@@ -34,12 +34,12 @@ Metrics <- readRDS("Data/Metrics.rds")
 ```
 
 ## view raw data
-Note that the raw data contain characters that will make things tricky later on.  I would exclude parenth etc as general practice. Also names are quite long, making it difficult to include in the models.  This is where having a data dicitonary is useful, as you can keep descriptions, formal names, plot names available for use in figures.
+
+Note that the raw data contain characters that will make things tricky later on. I would exclude parenth etc as general practice. Also names are quite long, making it difficult to include in the models. This is where having a data dicitonary is useful, as you can keep descriptions, formal names, plot names available for use in figures.
 
 ```{r view_raw_data}
 head(Metrics)
 ```
-
 
 ```{r data_dictionary}
 #Putting a data dictionary here in case it is useful
@@ -51,8 +51,8 @@ metrics <- Metrics %>%
 names(metrics)=dict$shortName
 ```
 
-
 ## Checking distributional assumptions
+
 Here we would put put some text describing the results, and setting up the next section, in case there were transformations we wanted to do.
 
 ```{r histograms with ggplot}
@@ -64,7 +64,6 @@ metrics %>%
     facet_wrap(~Indicator, scale="free_x")
     
 ```
-
 
 ```{r plot_histograms}
 
@@ -84,18 +83,14 @@ hist(Metrics$`Swartz Dominance Index (SDI)`)
 
 hist(Metrics$`Percentage of Axinopsida with low shell staining`)
 ```
- 
 
+##Explore Variables Here were are looking at what the variables are relative to our indicators, and whether we want to add variable transformations.
 
-
-##Explore Variables
-Here were are looking at what the variables are relative to our indicators, and whether we want to add variable transformations.
-
-###Asses if trends are reasonably linear
-Here we should be plotting response variables against predictors.  
+###Asses if trends are reasonably linear Here we should be plotting response variables against predictors.
 
 ### Distance
-Definitely some trends with distance,  but also definitely some non-linear things happening
+
+Definitely some trends with distance, but also definitely some non-linear things happening
 
 ```{r scatterplots in ggplot}
 #Distance scatterplot
@@ -166,9 +161,9 @@ Metrics %>%
 
   plot()
 ```
- 
 
 ## modeling section
+
 ```{r models}
 # Example model
 library(lme4)
@@ -178,4 +173,4 @@ trialmodel=glmer(`Total Abundance (ind/0.1m²)` ~ DiffuserDirection + DiffuserDi
 norfx=glm(`Total Abundance (ind/0.1m²)` ~ DiffuserDirection + DiffuserDistance + DiffuserDirection:DiffuserDistance,  data = Metrics, family = poisson)
 ```
 
-
+Some text here
