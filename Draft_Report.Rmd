@@ -1,0 +1,121 @@
+---
+title: "Breanna_Code"
+author: "Tom Bird"
+date: "29/09/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Preamble
+
+We are going to use a markdown document to communicate draft code and results, to try and setup a template for how we would report on these data to a client. 
+
+
+## Load packages
+I try and load packages separately from data.
+
+```{r load_packages}
+library(dplyr)
+library(lme4)
+
+```
+
+## Loading data
+
+In future, we should try and work from either a formatted database or a .csv extracted from that formatted database, and those data should have metadata etc etc.  For now we go with what we have.
+
+```{r load_data}
+#read saved data
+Metrics <- readRDS("Data/Metrics.rds")
+```
+
+```{r view_raw_data}
+head(Metrics)
+```
+
+
+## Checking distributional assumptions
+Here we would put put some text describing the results, and setting up the next section, in case there were transformations we wanted to do.
+
+```{r plot_histograms}
+par(mfrow=c(2,4))
+
+hist(Metrics$`Total Abundance (ind/0.1m²)`)
+
+hist(Metrics$`Total Richness`)
+
+hist(log(Metrics$`Total biomass (g/0.1m²)`))
+
+hist(Metrics$`Simpson's Diversity (1-D)`)
+
+hist(Metrics$`Simpson's Evenness (E)`)
+
+hist(Metrics$`Swartz Dominance Index (SDI)`)
+
+hist(Metrics$`Percentage of Axinopsida with low shell staining`)
+```
+ 
+
+
+
+##Explore Variables
+Here were are looking at what the variables are relative to our indicators, and whether we want to add variable transformations.
+
+###Asses if trends are reasonably linear
+
+```{r plot_stuff}
+Metrics %>%
+
+  select(DiffuserDistance, DiffuserDirection, `Total Abundance (ind/0.1m²)`) %>%
+
+  plot()
+
+Metrics %>%
+
+  select(DiffuserDistance, DiffuserDirection, `Total Richness`) %>%
+
+  plot()
+
+Metrics %>%
+
+  select(DiffuserDistance, DiffuserDirection, `Total biomass (g/0.1m²)`) %>%
+
+  plot()
+
+Metrics %>%
+
+  select(DiffuserDistance, DiffuserDirection, `Simpson's Diversity (1-D)`) %>%
+
+  plot()
+
+Metrics %>%
+
+  select(DiffuserDistance, DiffuserDirection, `Simpson's Evenness (E)`) %>%
+
+  plot()
+
+Metrics %>%
+
+  select(DiffuserDistance, DiffuserDirection, `Swartz Dominance Index (SDI)`) %>%
+
+  plot()
+
+Metrics %>% 
+
+  select(DiffuserDistance, DiffuserDirection, `Percentage of Axinopsida with low shell staining`) %>%
+
+  plot()
+```
+ 
+
+## modeling section
+```{r models}
+# Example model
+ 
+summary(glmer(`Total Abundance (ind/0.1m²`) ~ DiffuserDirection + DiffuserDistance + DiffuserDirection:DiffuserDistance + (1|Rep), data = Metrics, family = poisson)
+```
+
+
