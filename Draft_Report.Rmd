@@ -110,7 +110,7 @@ metrics %>%
 
 ### Direction
 
-```{r scatterplots in ggplot}
+```{r Direction scatterplot}
 
 metrics %>% 
   select(!c('Distance')) %>%
