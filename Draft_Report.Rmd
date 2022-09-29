@@ -20,6 +20,7 @@ I try and load packages separately from data.
 ```{r load_packages}
 library(dplyr)
 library(lme4)
+library(tidyverse)
 
 ```
 
@@ -40,10 +41,32 @@ head(Metrics)
 ```
 
 
+```{r data_dictionary}
+#Putting a data dictionary here in case it is useful
+dict=data.frame(longName=names(Metrics), shortName=c("Station", "Abundance", "Richness", "Biomass", "Diversity", "Evenness", "SDI", "Ax_Staining", "Year", "Rep", "Distance", "Direction"))
+
+#new data file with short names for playing
+metrics <- Metrics %>%
+  mutate(DiffuserDirection=ifelse(DiffuserDirection==1, "upstream", "downstream"))
+names(metrics)=dict$shortName
+```
+
+
 ## Checking distributional assumptions
 Here we would put put some text describing the results, and setting up the next section, in case there were transformations we wanted to do.
 
+```{r histograms with ggplot}
+metrics %>% 
+  select(!c('Direction', 'Distance')) %>%
+  pivot_longer(!c( 'Rep', 'Station', 'Year'), names_to="Indicator", values_to="value") %>%
+  ggplot(aes(x=value)) +
+    geom_histogram()+
+    facet_wrap(~Indicator, scale="free_x")
+    
+```
+
 ```{r plot_histograms}
+
 par(mfrow=c(2,4))
 
 hist(Metrics$`Total Abundance (ind/0.1m²)`)
@@ -68,8 +91,38 @@ hist(Metrics$`Percentage of Axinopsida with low shell staining`)
 Here were are looking at what the variables are relative to our indicators, and whether we want to add variable transformations.
 
 ###Asses if trends are reasonably linear
+Here we should be plotting response variables against predictors.  
 
-```{r plot_stuff}
+### Distance
+Definitely some trends with distance,  but also definitely some non-linear things happening
+
+```{r scatterplots in ggplot}
+#Distance scatterplot
+
+metrics %>% 
+  select(!c('Direction')) %>%
+  pivot_longer(!c( 'Rep', 'Station', 'Year', 'Distance'), names_to="Indicator", values_to="value") %>%
+  ggplot(aes(x=Distance, y=value)) +
+    geom_point()+
+    facet_wrap(~Indicator, scale="free_y")
+
+```
+
+### Direction
+
+```{r scatterplots in ggplot}
+
+metrics %>% 
+  select(!c('Distance')) %>%
+  pivot_longer(!c( 'Rep', 'Station', 'Year', 'Direction'), names_to="Indicator", values_to="value") %>%
+  ggplot(aes(x=Direction, y=value)) +
+    geom_boxplot()+
+    facet_wrap(~Indicator, scale="free_y")
+
+```
+
+```{r plot_response_v_predictor}
+# these are a good use of pipes, but don't give us an easy way to assess for linearity in the key variables. 
 Metrics %>%
 
   select(DiffuserDistance, DiffuserDirection, `Total Abundance (ind/0.1m²)`) %>%
