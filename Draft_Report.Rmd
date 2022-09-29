@@ -32,6 +32,9 @@ In future, we should try and work from either a formatted database or a .csv ext
 Metrics <- readRDS("Data/Metrics.rds")
 ```
 
+## view raw data
+Note that the raw data contain characters that will make things tricky later on.  I would exclude parenth etc as general practice. Also names are quite long, making it difficult to include in the models.  This is where having a data dicitonary is useful, as you can keep descriptions, formal names, plot names available for use in figures.
+
 ```{r view_raw_data}
 head(Metrics)
 ```
