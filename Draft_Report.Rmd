@@ -22,6 +22,7 @@ library(dplyr)
 library(lme4)
 library(tidyverse)
 library(lattice)
+
 ```
 
 ## Loading data
@@ -140,6 +141,20 @@ Only use model selection criteria like the AIC to compare models of the same fam
 
 Note that GLMMs "are surprisingly challenging to use even for statisticians. Although several software packages can handle GLMMs (Table 1), few ecologists and evolutionary biologists are aware of the range of options or of the possible pitfalls. In reviewing papers in ecology and evolution since 2005 found by Google Scholar, 311 out of 537 GLMM analyses (58%) used these tools inappropriately in some way"
 
+### Abundance
+
+Model used:
+
+Generalized linear mixed model fit by maximum likelihood (Laplace Approximation) ['glmerMod']
+
+Family: poisson ( log )
+
+Formula: Abundance \~ Direction + Distance + (1 \| Station)
+
+Data: metrics
+
+Distance and direction are significant. Abundance increases with distance, abundance is higher on the south side.
+
 ```{r abundance}
 # Example model
 # Abundance
@@ -220,6 +235,18 @@ dotplot(ranef(modelabundance4,condVar=TRUE))
 
 ```
 
+### Richness
+
+Model used:
+
+Call:
+
+glm(formula = Richness \~ Direction + Distance + Direction:Distance,
+
+family = poisson, data = metrics)
+
+Where all terms are significant, richness increases with increasing distance on the north side, but only increases slightly with distance on the south side. (The difference in response for each direction is characterized by the significant interaction term.)
+
 ```{r richness}
 # Richness
 
@@ -258,9 +285,6 @@ summary(modelrichness2)$aic    # without random effects
 
 
 #assess model
-library(lattice)
-
-
 # diagnostic plots
 plot(modelrichness2)
   # note that heteroscedasticity looks ok for model residuals
@@ -269,6 +293,16 @@ plot(modelrichness2)
   # smooth curve is mostly straight, looks like model fit is ok, 
   # there is a bit of a w shaped pattern, however
 ```
+
+### Biomass
+
+Model used:
+
+Call:
+
+lm(formula = log_Biomass \~ Direction + Distance, data = metrics)
+
+The biomass does not change with distance, but sites to the north have decreased biomass compared to the south.
 
 ```{r biomass}
 # Biomass
@@ -332,6 +366,18 @@ plot(modelbiomass3)
 
 ```
 
+### Swartz Dominance Index
+
+Model used:
+
+Call:
+
+glm(formula = Dominance \~ Direction + Distance + Direction:Distance,
+
+family = poisson, data = metrics)
+
+Where all terms are significant, dominance increases with increasing distance on the north side, and decreases with distance on the south side. (The difference in response for each direction is characterized by the significant interaction term.)
+
 ```{r dominance}
 # Swartz Dominance Index
 # Initial model with interaction term and random effects. Asess dispersion using possion family.
@@ -364,6 +410,18 @@ plot(modeldominance2)
 
 ```
 
+### Simpson's Diversity
+
+Model used:
+
+Call:
+
+lm(formula = Diversity \~ Direction + Distance + Direction:Distance,
+
+data = metrics)
+
+Where distance and the interaction with distance and direction terms are significant, diversity increases with increasing distance on the north side, but increases less dramatically with distance on the south side. (The difference in response for each direction is characterized by the significant interaction term.)
+
 ```{r diversity}
 
 # Diversity (Simpson's)
@@ -389,7 +447,7 @@ summary(modeldiversity2)
 
 # Compare both models AIC
 anova(modeldiversity1, modeldiversity2)
-# Conclude that random effects are significant in the model.
+# Random effects are significant in the model.
 # However, the simpler model has lower AIC. 
 # Removing random effects would simplify interpretation 
 
@@ -399,16 +457,11 @@ anova(modeldiversity1, modeldiversity2)
 
 
 # Diagnostic plots
-plot(modeldiversity1, type=c("p","smooth"))
+plot(modeldiversity2)
   # type p is the points of the scatterplot, 
   # smooth is the locally estimated scatterplot smoothing (loess)
   # note that heteroscedasticity looks ok for model residuals
   # smooth curve is mostly straight, looks like model fit is ok
-
-# QQ normal plot
-qqnorm(resid(modeldiversity1), main="normal qq-plot, residuals")
-qqline(resid(modeldiversity1))
-
   # note that residuals look mostly normally distributed in the qqplot, 
   # with some heavy tails on the lower left.
  
@@ -419,7 +472,22 @@ qqline(resid(modeldiversity1))
 
 
 
+
 ```
+
+### Simpson's Evenness
+
+Model used:
+
+Linear model
+
+Call:
+
+lm(formula = Evenness \~ Direction + Distance + Direction:Distance,
+
+data = metrics)
+
+Where all terms are significant, evenness decreases with increasing distance on the north side, but increases slightly with distance on the south side. (The difference in response for each direction is characterized by the significant interaction term.)
 
 ```{r evenness}
 # Evenness (Simpson's)
@@ -455,20 +523,28 @@ anova(modelevenness1, modelevenness2)
 
 
 # Diagnostic plots
-plot(modelevenness1, type=c("p","smooth"))
+plot(modelevenness2)
   # type p is the points of the scatterplot, 
   # smooth is the locally estimated scatterplot smoothing (loess)
   # note that heteroscedasticity looks ok for model residuals
   # smooth curve is mostly straight, looks like model fit is ok
-
-# QQ normal plot
-qqnorm(resid(modelevenness1), main="normal qq-plot, residuals")
-qqline(resid(modelevenness1))
   # note that residuals look mostly normally distributed in the qqplot, 
 
  
 
 ```
+
+### Axinopsida Proportion of Adults with Low Shell Staining
+
+Model used:
+
+Generalized linear mixed model fit by maximum likelihood (Laplace Approximation) ['glmerMod']
+
+Family: binomial ( logit )
+
+Formula: cbind(Shell_Successes, Shell_Trials - Shell_Successes) \~ Direction + Distance + (1 \| Station)
+
+Where all terms are significant, shell staining decreases with increasing distance, decreases from north to south.
 
 ```{r axinopsida}
 
