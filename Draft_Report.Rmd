@@ -21,7 +21,7 @@ I try and load packages separately from data.
 library(dplyr)
 library(lme4)
 library(tidyverse)
-
+library(lattice)
 ```
 
 ## Loading data
@@ -31,11 +31,16 @@ In future, we should try and work from either a formatted database or a .csv ext
 ```{r load_data}
 #read saved data
 Metrics <- readRDS("Data/Metrics.rds")
+
+axinopsida <- readRDS("Data/axinopsida.rds")
+
+Metrics <- Metrics %>%
+  merge(axinopsida, by = c("Station", "Rep"))
 ```
 
-## view raw data
+## View raw data
 
-Note that the raw data contain characters that will make things tricky later on. I would exclude parenth etc as general practice. Also names are quite long, making it difficult to include in the models. This is where having a data dicitonary is useful, as you can keep descriptions, formal names, plot names available for use in figures.
+Note that the raw data contain characters that will make things tricky later on. I would exclude parentheses etc. as general practice. Also names are quite long, making it difficult to include in the models. This is where having a data dictionary is useful, as you can keep descriptions, formal names, plot names available for use in figures.
 
 ```{r view_raw_data}
 head(Metrics)
@@ -43,11 +48,11 @@ head(Metrics)
 
 ```{r data_dictionary}
 #Putting a data dictionary here in case it is useful
-dict=data.frame(longName=names(Metrics), shortName=c("Station", "Abundance", "Richness", "Biomass", "Diversity", "Evenness", "SDI", "Ax_Staining", "Year", "Rep", "Distance", "Direction"))
+dict=data.frame(longName=names(Metrics), shortName=c("Station", "Rep", "Abundance", "Richness", "Biomass", "Diversity", "Evenness", "Dominance", "Shell_Staining", "Year", "Distance", "Direction", "Shell_Successes", "Shell_Trials"))
 
 #new data file with short names for playing
 metrics <- Metrics %>%
-  mutate(DiffuserDirection=ifelse(DiffuserDirection==1, "upstream", "downstream"))
+  mutate(DiffuserDirection=ifelse(DiffuserDirection==1, "north", "south"))
 names(metrics)=dict$shortName
 ```
 
@@ -55,122 +60,467 @@ names(metrics)=dict$shortName
 
 Here we would put put some text describing the results, and setting up the next section, in case there were transformations we wanted to do.
 
-```{r histograms with ggplot}
+##Explore Variables: Here were are looking at what the variables are relative to our indicators, and whether we want to add variable transformations.
+
+### Check distribution of response variables
+
+Determine the link and variance function (glm family) that will be used to transform the response variable for a good model fit. Count data or right skewed data is often poisson distributed.
+
+Quassi families, such as quassipoisson, are used when the variance is proportional to the mean and may be used when data are underdispersed or overdispersed.
+
+```{r histograms-raw}
+
 metrics %>% 
   select(!c('Distance')) %>%
   pivot_longer(!c( 'Rep', 'Station', 'Year', 'Direction'), names_to="Indicator", values_to="value") %>%
-  ggplot(aes(x=value, fill=Direction)) +
-    geom_histogram()+
+  ggplot(aes(x=value)) +
+    geom_histogram(aes(fill=Direction), bins=15)+
     facet_wrap(~Indicator, scale="free_x")
-    
+
+
 ```
 
-```{r plot_histograms}
+Transformed distributions
 
-par(mfrow=c(2,4))
+```{r histograms-transformed}
+#abundance, biomass, dominance, and shell staining approximately poisson distributed. Shell staining may be better represented with negative binomial
 
-hist(Metrics$`Total Abundance (ind/0.1m²)`)
 
-hist(Metrics$`Total Richness`)
+metrics <- metrics %>%
+  mutate(
+#log_Shell_Staining = log(Shell_Staining+1),
+         log_Biomass = log(Biomass), 
+         .keep = "unused")
 
-hist(log(Metrics$`Total biomass (g/0.1m²)`))
+metrics %>% 
+  select(!c('Distance')) %>%
+  pivot_longer(!c( 'Rep', 'Station', 'Year', 'Direction'), names_to="Indicator", values_to="value") %>%
+  ggplot(aes(x=value)) +
+    geom_histogram(aes(fill=Direction), bins=10)+
+    facet_wrap(~Indicator, scale="free_x")
 
-hist(Metrics$`Simpson's Diversity (1-D)`)
-
-hist(Metrics$`Simpson's Evenness (E)`)
-
-hist(Metrics$`Swartz Dominance Index (SDI)`)
-
-hist(Metrics$`Percentage of Axinopsida with low shell staining`)
 ```
 
-##Explore Variables Here were are looking at what the variables are relative to our indicators, and whether we want to add variable transformations.
+## Checking response trends
 
-###Asses if trends are reasonably linear Here we should be plotting response variables against predictors.
+Asses if trends are reasonably linear. Here we should be plotting response variables against predictors.
 
 ### Distance
 
-Definitely some trends with distance, but also definitely some non-linear things happening
+Definitely some trends with distance, but also definitely some non-linear things happening.
 
-```{r scatterplots in ggplot}
+```{r scatterplots}
 #Distance scatterplot
 
 metrics %>% 
   #select(!c('Direction')) %>%
   pivot_longer(!c( 'Rep', 'Station', 'Year', 'Distance', 'Direction'), names_to="Indicator",  values_to="value") %>%
-  ggplot(aes(x=Distance, y=value, fill=Direction)) +
+  ggplot(aes(x=Distance, y=value, colour=Direction)) +
     geom_point()+
+    stat_smooth(method = "lm", formula = y~x, aes(colour=Direction)) +
     facet_wrap(~Indicator, scale="free_y")
 
 ```
 
 ### Direction
 
-```{r Direction scatterplot}
+```{r Direction boxplot}
 
 metrics %>% 
   select(!c('Distance')) %>%
   pivot_longer(!c( 'Rep', 'Station', 'Year', 'Direction'), names_to="Indicator", values_to="value") %>%
-  ggplot(aes(x=Direction, y=value)) +
+  ggplot(aes(x=Direction, y=value, fill=Direction)) +
     geom_boxplot()+
     facet_wrap(~Indicator, scale="free_y")
-
 ```
 
-```{r plot_response_v_predictor}
-# these are a good use of pipes, but don't give us an easy way to assess for linearity in the key variables. 
-Metrics %>%
+## Modeling section
 
-  select(DiffuserDistance, DiffuserDirection, `Total Abundance (ind/0.1m²)`) %>%
+Only use model selection criteria like the AIC to compare models of the same family.
 
-  plot()
+Note that GLMMs "are surprisingly challenging to use even for statisticians. Although several software packages can handle GLMMs (Table 1), few ecologists and evolutionary biologists are aware of the range of options or of the possible pitfalls. In reviewing papers in ecology and evolution since 2005 found by Google Scholar, 311 out of 537 GLMM analyses (58%) used these tools inappropriately in some way"
 
-Metrics %>%
-
-  select(DiffuserDistance, DiffuserDirection, `Total Richness`) %>%
-
-  plot()
-
-Metrics %>%
-
-  select(DiffuserDistance, DiffuserDirection, `Total biomass (g/0.1m²)`) %>%
-
-  plot()
-
-Metrics %>%
-
-  select(DiffuserDistance, DiffuserDirection, `Simpson's Diversity (1-D)`) %>%
-
-  plot()
-
-Metrics %>%
-
-  select(DiffuserDistance, DiffuserDirection, `Simpson's Evenness (E)`) %>%
-
-  plot()
-
-Metrics %>%
-
-  select(DiffuserDistance, DiffuserDirection, `Swartz Dominance Index (SDI)`) %>%
-
-  plot()
-
-Metrics %>% 
-
-  select(DiffuserDistance, DiffuserDirection, `Percentage of Axinopsida with low shell staining`) %>%
-
-  plot()
-```
-
-## modeling section
-
-```{r models}
+```{r abundance}
 # Example model
-library(lme4)
-trialmodel=glmer(`Total Abundance (ind/0.1m²)` ~ DiffuserDirection + DiffuserDistance + DiffuserDirection:DiffuserDistance + (1|Station), data = Metrics, family = poisson)
+# Abundance
 
-# no random effects
-norfx=glm(`Total Abundance (ind/0.1m²)` ~ DiffuserDirection + DiffuserDistance + DiffuserDirection:DiffuserDistance,  data = Metrics, family = poisson)
+# Initial model with interaction term and random effects. Asess dispersion using possion family.
+modelabundance1=glmer(Abundance ~ Direction + Distance + Direction:Distance + (1|Station), data = metrics, family = poisson)
+summary(modelabundance1)
+
+
+#test for overdispersion 
+overdisp_fun <- function(model) {
+    rdf <- df.residual(model)
+    rp <- residuals(model,type="pearson")
+    Pearson.chisq <- sum(rp^2)
+    prat <- Pearson.chisq/rdf
+    pval <- pchisq(Pearson.chisq, df=rdf, lower.tail=FALSE)
+    c(chisq=Pearson.chisq,ratio=prat,rdf=rdf,p=pval)
+}
+
+overdisp_fun(modelabundance1)
+# p-value is small, likely over dispersed data. try quasipoisson to deal with overdispersion 
+
+# fit model using non-binomial family
+modelabundance2=glmer.nb(Abundance ~ Direction + Distance + Direction:Distance + (1|Station), data = metrics)
+summary(modelabundance2)
+#overdisp_fun(modelabundance2)
+#dispersion is better using negative binomial. Conclude that we can continue with poisson (simpler) but note that standard errors could be biased.
+
+
+
+
+# Model with no random effects
+modelabundance3=glm(Abundance ~ Direction + Distance + Direction:Distance,  data = metrics, family = poisson)
+summary(modelabundance3)
+
+# Compare both models AIC
+summary(modelabundance1)$AIC[1] # with random effects
+summary(modelabundance3)$aic    # without random effects
+# conclude that model with random effects is better due to smaller AIC
+
+
+#Remove non-significant interaction term from random effects model
+modelabundance4=glmer(Abundance ~ Direction + Distance + (1|Station), data = metrics, family = poisson)
+summary(modelabundance4)
+
+# Compare both random effects models (with and without interaction)
+summary(modelabundance1)$AIC[1] #with interaction
+summary(modelabundance4)$AIC[1] #without interaction
+# The model without the interaction term has a slightly higher AIC, but since the difference between the two models is less than 2 AIC units, the model without the interaction term is likely the better model.
+
+
+
+#assess model 4
+
+
+
+# diagnostic plot
+plot(modelabundance4,type=c("p","smooth"))
+  # type p is the points of the scatterplot, 
+  # smooth is the locally estimated scatterplot smoothing (loess)
+
+  # note that heteroscedasticity looks ok for model residuals
+  # note that residuals look mostly normally distributed in the qqplot, 
+  # with some heavy tails. Should be ok as glm can deal with heavy tails?
+  # smooth curve is mostly straight, looks like model fit is ok
+
+# QQ normal plot
+qqnorm(resid(modelabundance4), main="normal qq-plot, residuals")
+qqline(resid(modelabundance4))
+
+library(lattice)
+
+# plot the random effects
+dotplot(ranef(modelabundance4,condVar=TRUE)) 
+  # ranef to extract estimates of random effects, 
+  # dotplot quickly plots the estimates from the model
+  # station 14 is the most extreme
+
 ```
 
-Some text here
+```{r richness}
+# Richness
+
+# Initial model with interaction term and random effects. Asess dispersion using possion family.
+modelrichness1=glmer(Richness ~ Direction + Distance + Direction:Distance + (1|Station), data = metrics, family = poisson)
+summary(modelrichness1)
+
+
+#test for overdispersion 
+overdisp_fun <- function(model) {
+    rdf <- df.residual(model)
+    rp <- residuals(model,type="pearson")
+    Pearson.chisq <- sum(rp^2)
+    prat <- Pearson.chisq/rdf
+    pval <- pchisq(Pearson.chisq, df=rdf, lower.tail=FALSE)
+    c(chisq=Pearson.chisq,ratio=prat,rdf=rdf,p=pval)
+}
+
+
+overdisp_fun(modelrichness1)
+# p-value is large, likely not overdispersed data.
+
+
+
+
+# Model with no random effects
+modelrichness2=glm(Richness ~ Direction + Distance + Direction:Distance,  data = metrics, family = poisson)
+summary(modelrichness2)
+
+# Compare both models AIC
+summary(modelrichness1)$AIC[1] # with random effects
+summary(modelrichness2)$aic    # without random effects
+# conclude that model without random effects is better due to smaller AIC
+# keep significant interaction term 
+# model2 is best
+
+
+#assess model
+library(lattice)
+
+
+# diagnostic plots
+plot(modelrichness2)
+  # note that heteroscedasticity looks ok for model residuals
+  # note that residuals look mostly normally distributed, 
+  # with some heavy tails but overall looks good
+  # smooth curve is mostly straight, looks like model fit is ok, 
+  # there is a bit of a w shaped pattern, however
+```
+
+```{r biomass}
+# Biomass
+
+# biomass is not count data, poisson glm should not be used
+# instead, start with lmer on transformed data
+# Initial model with interaction term and random effects
+
+modelbiomass1=lmer(log_Biomass ~ Direction + Distance + Direction:Distance + (1|Station), data = metrics)
+anova(modelbiomass1)
+summary(modelbiomass1)
+
+# plot the random effects
+dotplot(ranef(modelbiomass1,condVar=TRUE)) 
+  # ranef to extract estimates of random effects, 
+  # dotplot quickly plots the estimates from the model
+  # station 14 and 15 are the most extreme but overlap at 0, assume that random effect is not needed, but will test for it below
+
+
+# Model with no random effects
+modelbiomass2=lm(log_Biomass ~ Direction + Distance + Direction:Distance,  data = metrics)
+summary(modelbiomass2)
+
+# Compare both models AIC
+anova(modelbiomass1, modelbiomass2)
+# Conclude that random effects are not significant in the model.
+# Also, the simpler model has lower AIC. 
+# Removing random effects also simplifies interpretation of model. 
+
+# Interaction not significant.
+# Distance not significant
+# Direction is significant
+# Overall, there is little evidence that distance
+# from the diffuser effects the biomass, 
+# but there is some evidence that direction from the diffuser has an effect 
+
+
+#Remove non-significant interaction term from fixed effects model
+modelbiomass3=lm(log_Biomass ~ Direction + Distance, data = metrics)
+summary(modelbiomass3)
+
+# Compare both random effects models (with and without interaction)
+anova(modelbiomass3, modelbiomass2)
+# No evidence that the coefficient of theinteraction term is significant. 
+# adjusted R squared is higher in model 3
+# conclude that model 3 is the best model, without random effects or interactions
+
+# Conclude that Direction is significant, 
+# Distance not significant in the model used to
+# describe biomass changes in study are in relation to the position of the diffuser
+# Direction is significant in the model to predict biomass in relation to the diffuser
+
+# Diagnostic plots
+plot(modelbiomass3)
+# possibly some evidence of heteroscadiscity, but minor
+# some evidence of heavy-tailed residulas in the qq plot, but minor
+
+
+
+
+
+```
+
+```{r dominance}
+# Swartz Dominance Index
+# Initial model with interaction term and random effects. Asess dispersion using possion family.
+modeldominance1=glmer(Dominance ~ Direction + Distance + Direction:Distance + (1|Station), data = metrics, family = poisson)
+summary(modeldominance1)
+# r shows a warning, random effects are small
+
+# Model with no random effects
+modeldominance2=glm(Dominance ~ Direction + Distance + Direction:Distance,  data = metrics, family = poisson)
+summary(modeldominance2)
+
+# Compare both models AIC
+summary(modeldominance1)$AIC[1] # with random effects
+summary(modeldominance2)$aic    # without random effects
+# conclude that model without random effects is better due to smaller AIC, 
+# and is the simpler model
+
+# all terms are significant in the model to describe dominance 
+# in relation to diffuser
+
+#assess model
+
+# diagnostic plots
+plot(modeldominance2)
+  # note that heteroscedasticity looks ok for model residuals
+  # note that residuals look mostly normally distributed in the qqplot, 
+  # with some heavy tails. Should be ok as glm can deal with heavy tails?
+  # smooth curve is mostly straight, looks like model fit is ok
+
+
+```
+
+```{r diversity}
+
+# Diversity (Simpson's)
+
+# diversity is not count data, poisson glm should not be used
+# instead, start with lmer
+# Initial model with interaction term and random effects
+
+modeldiversity1=lmer(Diversity ~ Direction + Distance + Direction:Distance + (1|Station), data = metrics)
+anova(modeldiversity1)
+summary(modeldiversity1)
+
+# plot the random effects
+dotplot(ranef(modeldiversity1,condVar=TRUE)) 
+  # ranef to extract estimates of random effects, 
+  # dotplot quickly plots the estimates from the model
+  # station 14 and 13 are the most extreme, most overlap 0, random effect may be needed, will test for it below
+
+
+# Model with no random effects
+modeldiversity2=lm(Diversity ~ Direction + Distance + Direction:Distance,  data = metrics)
+summary(modeldiversity2)
+
+# Compare both models AIC
+anova(modeldiversity1, modeldiversity2)
+# Conclude that random effects are significant in the model.
+# However, the simpler model has lower AIC. 
+# Removing random effects would simplify interpretation 
+
+# For the model with random effects, Distance, as well as the interaction of distance and direction are non-zero.
+#Therefore, Distance and direction are important in determining diversity in relation to the diffuser
+
+
+
+# Diagnostic plots
+plot(modeldiversity1, type=c("p","smooth"))
+  # type p is the points of the scatterplot, 
+  # smooth is the locally estimated scatterplot smoothing (loess)
+  # note that heteroscedasticity looks ok for model residuals
+  # smooth curve is mostly straight, looks like model fit is ok
+
+# QQ normal plot
+qqnorm(resid(modeldiversity1), main="normal qq-plot, residuals")
+qqline(resid(modeldiversity1))
+
+  # note that residuals look mostly normally distributed in the qqplot, 
+  # with some heavy tails on the lower left.
+ 
+
+
+
+
+
+
+
+```
+
+```{r evenness}
+# Evenness (Simpson's)
+
+# evenness is not count data, poisson glm should not be used
+# instead, start with lmer 
+# Initial model with interaction term and random effects
+
+modelevenness1=lmer(Evenness ~ Direction + Distance + Direction:Distance + (1|Station), data = metrics)
+anova(modelevenness1)
+summary(modelevenness1)
+
+# plot the random effects
+dotplot(ranef(modelevenness1,condVar=TRUE)) 
+  # ranef to extract estimates of random effects, 
+  # dotplot quickly plots the estimates from the model
+  # station 14 and 13 are the most extreme, random effect is likely moderately important for a few sites, but will test for it below
+
+
+# Model with no random effects
+modelevenness2=lm(Evenness ~ Direction + Distance + Direction:Distance,  data = metrics)
+summary(modelevenness2)
+
+# Compare both models AIC
+anova(modelevenness1, modelevenness2)
+# Conclude that random effects are significant in the model.
+# However, the simpler model has lower AIC. 
+# Removing random effects would simplify interpretation 
+
+# For the model with random effects, Distance, as well as the interaction of distance and direction are non-zero.
+#Therefore, Distance and direction are important in determining evenness in relation to the diffuser
+
+
+
+# Diagnostic plots
+plot(modelevenness1, type=c("p","smooth"))
+  # type p is the points of the scatterplot, 
+  # smooth is the locally estimated scatterplot smoothing (loess)
+  # note that heteroscedasticity looks ok for model residuals
+  # smooth curve is mostly straight, looks like model fit is ok
+
+# QQ normal plot
+qqnorm(resid(modelevenness1), main="normal qq-plot, residuals")
+qqline(resid(modelevenness1))
+  # note that residuals look mostly normally distributed in the qqplot, 
+
+ 
+
+```
+
+```{r axinopsida}
+
+# Since staining data are a proportion, use a binomial family glm. Included original counts of data rather than proportions
+
+# Shell_Staining
+
+# Initial model with interaction term and random effects. 
+modelaxinopsida1=glmer(cbind(Shell_Successes, Shell_Trials - Shell_Successes) ~ Direction + Distance + Direction:Distance + (1|Station), data = metrics, family = binomial)
+summary(modelaxinopsida1)
+
+# Model with no random effects
+modelaxinopsida2=glm(cbind(Shell_Successes, Shell_Trials - Shell_Successes) ~ Direction + Distance + Direction:Distance,  data = metrics, family = binomial)
+summary(modelaxinopsida2)
+
+# Compare both models AIC
+summary(modelaxinopsida1)$AIC[1] # with random effects
+summary(modelaxinopsida2)$aic    # without random effects
+# conclude that model with random effects is better due to smaller AIC
+
+
+#Remove non-significant interaction term from random effects model
+modelaxinopsida3=glmer(cbind(Shell_Successes, Shell_Trials - Shell_Successes)~ Direction + Distance + (1|Station), data = metrics, family = binomial)
+summary(modelaxinopsida3)
+
+# Compare both random effects models (with and without interaction)
+summary(modelaxinopsida1)$AIC[1] #with interaction
+summary(modelaxinopsida3)$AIC[1] #without interaction
+# The model without the interaction term has lower higher AIC and is a simpler model. This model without the interaction term is likely the better model.
+
+
+
+# diagnostic plot
+plot(modelaxinopsida3,type=c("p","smooth"))
+  # type p is the points of the scatterplot, 
+  # smooth is the locally estimated scatterplot smoothing (loess)
+
+  # note that heteroscedasticity looks ok for model residuals
+  # note that residuals look mostly normally distributed in the qqplot, 
+  # with some heavy tails. Should be ok as glm can deal with heavy tails?
+  # smooth curve is mostly straight, looks like model fit is ok
+
+# QQ normal plot
+qqnorm(resid(modelaxinopsida3), main="normal qq-plot, residuals")
+qqline(resid(modelaxinopsida3))
+
+
+# plot the random effects
+dotplot(ranef(modelaxinopsida3,condVar=TRUE)) 
+  # ranef to extract estimates of random effects, 
+  # dotplot quickly plots the estimates from the model
+  # station 5 and 4 are the most extreme
+  # Random effect is likely required for a few sites
+
+```
